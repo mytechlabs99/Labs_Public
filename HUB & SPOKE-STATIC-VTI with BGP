@@ -1,0 +1,328 @@
+****HUB & SPOKE-STATIC-VTI with BGP****
+****HUB-STATIC-VTI with BGP****
+!
+hostname CORE-FW01
+!
+domain-name lab.local
+!
+same-security-traffic permit intra-interface
+same-security-traffic permit inter-interface
+!
+int g0/0
+nameif WAN
+ip add 100.100.100.1 255.255.255.0
+no shut
+!
+int g0/1
+ip add 172.16.255.1 255.255.255.248
+nameif CORE
+security-level 100
+no shut
+!
+crypto ikev2 policy 5
+ encryption aes-gcm-256
+ integrity null
+ group 20
+ prf sha256
+ lifetime seconds 86400
+!
+crypto ipsec ikev2 ipsec-proposal PROPOSAL
+ protocol esp encryption aes-gcm-256
+ protocol esp integrity sha-256
+!
+ crypto ipsec profile IPSEC-PROFILE
+ set ikev2 ipsec-proposal PROPOSAL
+ set pfs group20
+!
+group-policy VPN-GROUP-POLICY internal
+group-policy VPN-GROUP-POLICY attributes
+vpn-tunnel-protocol ikev2
+!
+!!***Spoke-1***!! 
+!
+ interface TUNNEL 10
+ nameif TUNNEL
+ ip address 10.10.10.1 255.255.255.252
+ tunnel source interface WAN
+ tunnel destination 100.100.100.3
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+!
+!
+tunnel-group 100.100.100.3 type ipsec-l2l
+tunnel-group 100.100.100.3 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.3 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!
+!!***Spoke-2***!! 
+
+interface TUNNEL 20
+ nameif TUNNEL-20
+ ip address 20.20.20.1 255.255.255.0
+ tunnel source interface WAN
+ tunnel destination 100.100.100.4
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+ 
+tunnel-group 100.100.100.4 type ipsec-l2l
+tunnel-group 100.100.100.4 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.4 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!!***Spoke-2***!! 
+!
+interface TUNNEL 30
+ nameif TUNNEL-30
+ ip address 30.30.30.1 255.255.255.0
+ tunnel source interface WAN
+ tunnel destination 100.100.100.5
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+!
+!
+tunnel-group 100.100.100.5 type ipsec-l2l
+tunnel-group 100.100.100.5 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.5 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!!!***BGP****!!!
+!
+access-list 1 deny any
+route-map FILTER-REMOTE permit 10
+match 
+!
+router bgp 65000
+ address-family ipv4 unicast
+  neighbor 10.10.10.2 remote-as 65001
+  neighbor 10.10.10.2 activate
+  neighbor 10.10.10.2 default-originate
+  neighbor 10.10.10.2 route-map FILTER-REMOTE out
+  !
+  neighbor 20.20.20.2 remote-as 65002
+  neighbor 20.20.20.2 activate
+  neighbor 20.20.20.2 default-originate
+  neighbor 20.20.20.2 route-map FILTER-REMOTE out
+  !
+  neighbor 30.30.30.3 remote-as 65003
+  neighbor 30.30.30.3 activate
+  neighbor 30.30.30.3 default-originate
+  neighbor 30.30.30.3 route-map FILTER-REMOTE out
+  !
+  redistribute ospf 10
+  no auto-summary
+  no synchronization
+ exit-address-family
+!
+router ospf 10
+ router-id 172.16.255.1
+ network 172.16.255.0 255.255.255.248 area 0
+ log-adj-changes
+ redistribute bgp 65000 subnets
+---
+
+****SPOKE-SITE-A-STATIC-VTI with BGP****
+!
+hostname SITE-A-FW01
+!
+domain-name lab.local
+!
+same-security-traffic permit intra-interface
+same-security-traffic permit inter-interface
+!
+int g0/0
+nameif WAN
+ip add 100.100.100.3 255.255.255.0
+no shut
+!
+int g0/1
+ip add 172.17.255.1 255.255.255.248
+nameif CORE
+security-level 100
+no shut
+!
+crypto ikev2 policy 5
+ encryption aes-gcm-256
+ integrity null
+ group 20
+ prf sha256
+ lifetime seconds 86400
+!
+crypto ipsec ikev2 ipsec-proposal PROPOSAL
+ protocol esp encryption aes-gcm-256
+ protocol esp integrity sha-256
+!
+ crypto ipsec profile IPSEC-PROFILE
+ set ikev2 ipsec-proposal PROPOSAL
+ set pfs group20
+!
+group-policy VPN-GROUP-POLICY internal
+group-policy VPN-GROUP-POLICY attributes
+vpn-tunnel-protocol ikev2
+!
+ interface TUNNEL 10
+ nameif TUNNEL
+ ip address 10.10.10.2 255.255.255.252
+ tunnel source interface WAN
+ tunnel destination 100.100.100.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+!
+!
+tunnel-group 100.100.100.1 type ipsec-l2l
+tunnel-group 100.100.100.1 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.1 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!!!BGP!!!
+!
+router bgp 65001
+address-family ipv4 unicast
+neighbor 10.10.10.1 remote-as 65000
+neighbor 10.10.10.1 activate
+redistribute connected
+!
+!
+dhcprelay server 192.168.1.200 TUNNEL 
+dhcprelay enable SERVER 
+!
+
+---
+****SPOKE-SITE-B-STATIC-VTI with BGP****
+!
+hostname SITE-B-FW01
+!
+domain-name lab.local
+!
+same-security-traffic permit intra-interface
+same-security-traffic permit inter-interface
+!
+int g0/0
+nameif WAN
+ip add 100.100.100.4 255.255.255.0
+no shut
+!
+int g0/1
+ip add 172.18.255.1 255.255.255.248
+nameif CORE
+security-level 100
+no shut
+!
+crypto ikev2 policy 5
+ encryption aes-gcm-256
+ integrity null
+ group 20
+ prf sha256
+ lifetime seconds 86400
+!
+crypto ipsec ikev2 ipsec-proposal PROPOSAL
+ protocol esp encryption aes-gcm-256
+ protocol esp integrity sha-256
+!
+ crypto ipsec profile IPSEC-PROFILE
+ set ikev2 ipsec-proposal PROPOSAL
+ set pfs group20
+!
+group-policy VPN-GROUP-POLICY internal
+group-policy VPN-GROUP-POLICY attributes
+vpn-tunnel-protocol ikev2
+!
+ interface TUNNEL 20
+ nameif TUNNEL
+ ip address 20.20.20.2 255.255.255.0
+ tunnel source interface WAN
+ tunnel destination 100.100.100.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+!
+!
+tunnel-group 100.100.100.1 type ipsec-l2l
+tunnel-group 100.100.100.1 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.1 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!!!BGP!!!
+!
+router bgp 65002
+address-family ipv4 unicast
+neighbor 20.20.20.1 remote-as 65000
+neighbor 20.20.20.1 activate
+redistribute connected
+!
+---
+****SPOKE-SITE-C-STATIC-VTI with BGP****
+!
+hostname SITE-C-FW01
+!
+domain-name lab.local
+!
+same-security-traffic permit intra-interface
+same-security-traffic permit inter-interface
+!
+int g0/0
+nameif WAN
+ip add 100.100.100.5 255.255.255.0
+no shut
+!
+int g0/1
+ip add 172.19.255.1 255.255.255.248
+nameif CORE
+security-level 100
+no shut
+!
+crypto ikev2 policy 5
+ encryption aes-gcm-256
+ integrity null
+ group 20
+ prf sha256
+ lifetime seconds 86400
+!
+crypto ipsec ikev2 ipsec-proposal PROPOSAL
+ protocol esp encryption aes-gcm-256
+ protocol esp integrity sha-256
+!
+ crypto ipsec profile IPSEC-PROFILE
+ set ikev2 ipsec-proposal PROPOSAL
+ set pfs group20
+!
+group-policy VPN-GROUP-POLICY internal
+group-policy VPN-GROUP-POLICY attributes
+vpn-tunnel-protocol ikev2
+!
+ interface TUNNEL 30
+ nameif TUNNEL
+ ip address 30.30.30.3 255.255.255.0
+ tunnel source interface WAN
+ tunnel destination 100.100.100.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROFILE
+!
+!
+tunnel-group 100.100.100.1 type ipsec-l2l
+tunnel-group 100.100.100.1 general-attributes
+default-group-policy VPN-GROUP-POLICY
+tunnel-group 100.100.100.1 ipsec-attributes
+ikev2 remote-authentication pre-shared-key cisco123
+ikev2 local-authentication pre-shared-key cisco123
+!
+!!!BGP!!!
+!
+router bgp 65003
+address-family ipv4 unicast
+neighbor 30.30.30.1 remote-as 65000
+neighbor 30.30.30.1 activate
+redistribute connected
+!
+dhcprelay server 192.168.1.200 TUNNEL 
+dhcprelay enable CORE
+!
